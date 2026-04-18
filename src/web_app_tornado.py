@@ -231,7 +231,7 @@ def render_page(bundle: Dict | None = None, result: Dict | None = None, error: s
     gallery_html = "".join(
         (
             '<figure class="eg-card">'
-            f'<div class="eg-illus"><img src="{e["data_uri"]}" alt="Jaundice visual reference" loading="lazy"/></div>'
+            f'<div class="eg-illus"><img src="/static/examples/{html.escape(e["file_name"])}" alt="Jaundice visual reference" loading="lazy" decoding="async" fetchpriority="low" width="{int(e.get("width", 960))}" height="{int(e.get("height", 640))}"/></div>'
             f'<figcaption><strong>{html.escape(e["title"])}</strong><br/>{html.escape(e["desc"])}</figcaption>'
             "</figure>"
         )
@@ -513,7 +513,7 @@ def render_page(bundle: Dict | None = None, result: Dict | None = None, error: s
     {examples_block}
 
     <section class="card">
-      <form action="/predict" method="post" enctype="multipart/form-data">
+      <form id="predictForm" action="/predict" method="post" enctype="multipart/form-data">
         <div>
           <label>Age (hours)</label>
           <input name="age_hours" type="number" min="0" max="2000" step="1" value="72" required />
@@ -558,7 +558,7 @@ def render_page(bundle: Dict | None = None, result: Dict | None = None, error: s
           </div>
         </div>
         <div class="full">
-          <button type="submit" id="runBtn">Run Prediction</button>
+          <button type="submit" id="runBtn" formaction="/predict" formmethod="post">Run Prediction</button>
           <div id="runStatus" class="run-status" style="display:none;">Uploading...</div>
         </div>
         <div class="full">
@@ -592,10 +592,16 @@ def render_page(bundle: Dict | None = None, result: Dict | None = None, error: s
         const f = (zipInput.files || [])[0];
         zipInfo.textContent = f ? `Selected ZIP: ${{f.name}}` : 'No ZIP selected';
       }});
-      const form = document.querySelector('form[action="/predict"]');
+      const form = document.getElementById('predictForm');
       const runBtn = document.getElementById('runBtn');
       const runStatus = document.getElementById('runStatus');
       if (form && runBtn && runStatus) form.addEventListener('submit', function () {{
+        // Force POST /predict for both desktop and mobile browsers.
+        form.method = 'post';
+        form.action = '/predict';
+        runBtn.setAttribute('formmethod', 'post');
+        runBtn.setAttribute('formaction', '/predict');
+
         runBtn.disabled = true;
         runBtn.textContent = 'Running prediction...';
         runStatus.style.display = 'block';
@@ -628,6 +634,10 @@ class HomeHandler(BaseHandler):
 
 
 class PredictHandler(BaseHandler):
+    def get(self):
+        # Mobile refresh/back may request GET /predict; redirect to home form gracefully.
+        self.redirect("/", status=303)
+
     def post(self):
         try:
             age_hours = float(self.get_body_argument("age_hours"))
@@ -712,6 +722,8 @@ class PredictHandler(BaseHandler):
 
 
 def make_app(run_dir: Path) -> tornado.web.Application:
+    project_root = Path(__file__).resolve().parents[1]
+    static_root = project_root / "web_assets"
     return tornado.web.Application(
         [
             (r"/", HomeHandler),
@@ -719,6 +731,7 @@ def make_app(run_dir: Path) -> tornado.web.Application:
         ],
         run_dir=str(run_dir),
         bundle=None,
+        static_path=str(static_root),
         debug=False,
     )
 
