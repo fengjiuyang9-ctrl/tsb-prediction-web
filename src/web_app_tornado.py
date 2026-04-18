@@ -26,6 +26,11 @@ DEFAULT_RUN_DIR = Path(
     "experiments_实验输出/e2_final_F3_reg_lr_tune_5fold10/raw_5fold10_F3_reg_lr_tune/run_20260417_223410"
 )
 
+# Online demo performance guards
+ONLINE_MAX_IMAGES = int(os.environ.get("ONLINE_MAX_IMAGES", "2"))
+ONLINE_ZIP_MAX_IMAGES = int(os.environ.get("ONLINE_ZIP_MAX_IMAGES", str(ONLINE_MAX_IMAGES)))
+ONLINE_MAX_EDGE = int(os.environ.get("ONLINE_MAX_EDGE", "1280"))
+
 
 def load_json(path: Path) -> Dict:
     with path.open("r", encoding="utf-8-sig") as f:
@@ -189,7 +194,19 @@ def aggregate_multi_image(values: List[float], method: str = "median") -> float:
     return float(np.median(arr))
 
 
-def _collect_images_from_zip(zip_bytes: bytes, max_images: int = 200) -> List[Dict[str, bytes | str]]:
+def _resize_for_online(image: Image.Image) -> Image.Image:
+    if ONLINE_MAX_EDGE <= 0:
+        return image
+    w, h = image.size
+    if max(w, h) <= ONLINE_MAX_EDGE:
+        return image
+    resample = Image.Resampling.BILINEAR if hasattr(Image, "Resampling") else Image.BILINEAR
+    img = image.copy()
+    img.thumbnail((ONLINE_MAX_EDGE, ONLINE_MAX_EDGE), resample)
+    return img
+
+
+def _collect_images_from_zip(zip_bytes: bytes, max_images: int = ONLINE_ZIP_MAX_IMAGES) -> List[Dict[str, bytes | str]]:
     allowed = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
     out: List[Dict[str, bytes | str]] = []
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
@@ -462,6 +479,11 @@ def render_page(bundle: Dict | None = None, result: Dict | None = None, error: s
       display: flex;
       justify-content: flex-end;
     }}
+    .run-status {{
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }}
     .link-btn {{
       display: inline-block;
       border: 1px solid var(--line);
@@ -518,6 +540,7 @@ def render_page(bundle: Dict | None = None, result: Dict | None = None, error: s
           <label>Upload Images</label>
           <div class="muted">Upload one or more neonatal skin images for prediction.</div>
           <div class="muted">Supported regions: forehead, chest, and foot.</div>
+          <div class="muted">Online demo limit: up to {ONLINE_MAX_IMAGES} images per request.</div>
           <input id="images" class="file-native" name="images" type="file" accept=".jpg,.jpeg,.png,image/*" multiple />
           <div class="file-row">
             <button type="button" id="imagesBtn" class="file-btn">Choose Images</button>
@@ -535,7 +558,8 @@ def render_page(bundle: Dict | None = None, result: Dict | None = None, error: s
           </div>
         </div>
         <div class="full">
-          <button type="submit">Run Prediction</button>
+          <button type="submit" id="runBtn">Run Prediction</button>
+          <div id="runStatus" class="run-status" style="display:none;">Uploading...</div>
         </div>
         <div class="full">
           <a class="link-btn" href="/">Clear</a>
@@ -567,6 +591,17 @@ def render_page(bundle: Dict | None = None, result: Dict | None = None, error: s
       if (zipInput && zipInfo) zipInput.addEventListener('change', function () {{
         const f = (zipInput.files || [])[0];
         zipInfo.textContent = f ? `Selected ZIP: ${{f.name}}` : 'No ZIP selected';
+      }});
+      const form = document.querySelector('form[action="/predict"]');
+      const runBtn = document.getElementById('runBtn');
+      const runStatus = document.getElementById('runStatus');
+      if (form && runBtn && runStatus) form.addEventListener('submit', function () {{
+        runBtn.disabled = true;
+        runBtn.textContent = 'Running prediction...';
+        runStatus.style.display = 'block';
+        runStatus.textContent = 'Uploading...';
+        setTimeout(function () {{ runStatus.textContent = 'Loading model...'; }}, 450);
+        setTimeout(function () {{ runStatus.textContent = 'Running prediction... Please wait...'; }}, 1200);
       }});
     }})();
   </script>
@@ -614,15 +649,15 @@ class PredictHandler(BaseHandler):
 
             extra_from_zip: List[Dict[str, bytes | str]] = []
             for z in zip_files:
-                extra_from_zip.extend(_collect_images_from_zip(z["body"], max_images=200))
+                extra_from_zip.extend(_collect_images_from_zip(z["body"], max_images=ONLINE_ZIP_MAX_IMAGES))
 
             if extra_from_zip:
                 files = list(files) + extra_from_zip
 
             if not files:
                 raise ValueError("Please upload at least one image.")
-            if len(files) > 200:
-                raise ValueError(f"At most 200 images per submission. Current: {len(files)}.")
+            if len(files) > ONLINE_MAX_IMAGES:
+                raise ValueError(f"Online demo allows up to {ONLINE_MAX_IMAGES} images per submission. Current: {len(files)}.")
 
             image_rows = []
             subject_preds = []
@@ -630,6 +665,7 @@ class PredictHandler(BaseHandler):
 
             for idx, f in enumerate(files, start=1):
                 image = Image.open(io.BytesIO(f["body"])).convert("RGB")
+                image = _resize_for_online(image)
                 fold_preds = []
                 for p in self.bundle["predictors"]:
                     v = p.predict_umol(image=image, age_hours=age_hours, sex=sex, race=race)
