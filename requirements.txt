@@ -1,7 +1,6 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-tornado>=6.3.0
-torch==2.2.2+cpu
-torchvision==0.17.2+cpu
-numpy>=1.24.0
+﻿tornado>=6.3.0
+torch==2.2.2
+torchvision==0.17.2
+numpy>=1.24.0,<2.0.0
 pandas>=2.0.0
 Pillow>=10.0.0
