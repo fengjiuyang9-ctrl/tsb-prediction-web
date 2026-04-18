@@ -689,8 +689,9 @@ def make_app(run_dir: Path) -> tornado.web.Application:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="TSB web app (tornado)")
-    p.add_argument("--host", type=str, default="0.0.0.0")
-    p.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8501")))
+    default_host = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"
+    p.add_argument("--host", type=str, default=default_host)
+    p.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8080")))
     p.add_argument("--run_dir", type=str, default=os.environ.get("RUN_DIR", str(DEFAULT_RUN_DIR)))
     p.add_argument("--check_only", action="store_true", help="Load models and exit.")
     return p.parse_args()
@@ -704,10 +705,16 @@ def main() -> None:
         print(f"check_ok run_dir={run_dir} device={bundle['device']} folds={len(bundle['predictors'])}")
         return
     app = make_app(run_dir)
-    app.listen(args.port, address=args.host)
-    print(f"TSB web app ready at http://127.0.0.1:{args.port}")
-    if args.host == "0.0.0.0":
-        print(f"For mobile, open: http://<your-lan-ip>:{args.port}")
+    bind_host = args.host
+    # In cloud platforms (e.g., Railway), force public bind even if host is overridden.
+    if os.environ.get("PORT") and bind_host in {"127.0.0.1", "localhost"}:
+        bind_host = "0.0.0.0"
+    app.listen(args.port, address=bind_host)
+    print(f"TSB web app listening on {bind_host}:{args.port}")
+    if bind_host == "0.0.0.0":
+        print(f"Public deployment mode enabled (bind 0.0.0.0:{args.port}).")
+    else:
+        print(f"Local URL: http://127.0.0.1:{args.port}")
     tornado.ioloop.IOLoop.current().start()
 
 
