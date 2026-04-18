@@ -1,7 +1,7 @@
-﻿# TSB Prediction Web (5-Fold Deployment Version)
+﻿# TSB Prediction Web (5-Fold Railway Build-Optimized Version)
 
 ## 结论
-这是可部署到 Railway 的 Python Tornado 版本，默认使用 5-fold 聚合推理。
+这是可部署到 Railway 的 Python Tornado 版本，默认使用 5-fold 聚合推理，并针对 Railway 构建超时做了依赖优化。
 
 ## 本地运行
 ```bash
@@ -26,10 +26,14 @@ python src/web_app_tornado.py
 - `runtime.txt`: `3.10.14`
 
 ## 依赖说明
-- `torch==2.2.2`
-- `torchvision==0.17.2`
-- `numpy>=1.24.0,<2.0.0`
+- Linux（Railway）使用：
+  - `torch==2.2.2+cpu`
+  - `torchvision==0.17.2+cpu`
+- Windows 本地开发使用：
+  - `torch==2.2.2`
+  - `torchvision==0.17.2`
+- `numpy` 固定为 `<2.0.0` 以保证与 `torch 2.2.2` 兼容。
 
 ## 说明
-- 当前为 5-fold 聚合版本。
-- 如需演示单 fold，可在启动命令中增加：`MAX_FOLDS=1`。
+- 保持 5-fold 聚合，不降级业务逻辑。
+- 模型改为懒加载：服务启动时不立即加载 5 个 fold，首次预测请求时再加载，降低启动压力。

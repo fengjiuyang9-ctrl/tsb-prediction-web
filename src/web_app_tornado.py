@@ -209,7 +209,7 @@ def _collect_images_from_zip(zip_bytes: bytes, max_images: int = 200) -> List[Di
     return out
 
 
-def render_page(bundle: Dict, result: Dict | None = None, error: str | None = None) -> str:
+def render_page(bundle: Dict | None = None, result: Dict | None = None, error: str | None = None) -> str:
     examples = EMBEDDED_EXAMPLES
     gallery_html = "".join(
         (
@@ -486,7 +486,7 @@ def render_page(bundle: Dict, result: Dict | None = None, error: str | None = No
   <main class="wrap">
     <section class="hero">
       <h1>TSB Prediction System</h1>
-      <div class="sub">User mode: each image is predicted by {len(bundle["predictors"])}-fold ensemble, then multiple images are aggregated by median.</div>
+      <div class="sub">User mode: each image is predicted by {len(bundle["predictors"]) if bundle else "5"}-fold ensemble, then multiple images are aggregated by median.</div>
     </section>
     {examples_block}
 
@@ -578,12 +578,18 @@ def render_page(bundle: Dict, result: Dict | None = None, error: str | None = No
 class BaseHandler(tornado.web.RequestHandler):
     @property
     def bundle(self) -> Dict:
-        return self.application.settings["bundle"]
+        b = self.application.settings.get("bundle")
+        if b is None:
+            run_dir = Path(self.application.settings["run_dir"])
+            b = load_bundle(run_dir)
+            self.application.settings["bundle"] = b
+        return b
 
 
 class HomeHandler(BaseHandler):
     def get(self):
-        self.write(render_page(self.bundle))
+        # Home page can render without loading all models.
+        self.write(render_page(None))
 
 
 class PredictHandler(BaseHandler):
@@ -669,13 +675,14 @@ class PredictHandler(BaseHandler):
             self.write(render_page(self.bundle, error=f"Prediction failed: {e}"))
 
 
-def make_app(bundle: Dict) -> tornado.web.Application:
+def make_app(run_dir: Path) -> tornado.web.Application:
     return tornado.web.Application(
         [
             (r"/", HomeHandler),
             (r"/predict", PredictHandler),
         ],
-        bundle=bundle,
+        run_dir=str(run_dir),
+        bundle=None,
         debug=False,
     )
 
@@ -692,11 +699,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     run_dir = Path(args.run_dir)
-    bundle = load_bundle(run_dir)
     if args.check_only:
+        bundle = load_bundle(run_dir)
         print(f"check_ok run_dir={run_dir} device={bundle['device']} folds={len(bundle['predictors'])}")
         return
-    app = make_app(bundle)
+    app = make_app(run_dir)
     app.listen(args.port, address=args.host)
     print(f"TSB web app ready at http://127.0.0.1:{args.port}")
     if args.host == "0.0.0.0":
