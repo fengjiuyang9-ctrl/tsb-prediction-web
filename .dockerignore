@@ -1,0 +1,31 @@
+﻿# Keep Docker build context minimal
+.git
+.git/**
+.venv
+.venv/**
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Temporary/cache/results not needed for web runtime
+cache*/
+piptmp/
+outputs*/
+logs/
+
+# Non-runtime project folders
+data/
+docs*/
+notebooks*/
+tests*/
+MobileSAM/
+models/
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

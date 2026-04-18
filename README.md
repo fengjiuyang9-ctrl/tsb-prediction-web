@@ -1,7 +1,7 @@
-﻿# TSB Prediction Web (Tornado)
+﻿# TSB Prediction Web (Demo Deployment Version)
 
 ## 结论
-这是一个 Python Tornado 网页应用，入口为 `src/web_app_tornado.py`，可直接部署到 Railway。
+这是一个可部署到 Railway 的 Python Tornado 演示版。当前默认以单 fold（`MAX_FOLDS=1`）运行，用于显著降低镜像体积。
 
 ## 本地运行
 ```bash
@@ -13,16 +13,18 @@ python src/web_app_tornado.py
 ## Railway 部署
 推荐 Start Command：
 ```bash
-python src/web_app_tornado.py
+MAX_FOLDS=1 python src/web_app_tornado.py
 ```
+也可直接使用仓库内 `Procfile`。
 
-应用已支持从环境变量读取端口：`PORT`。
-Railway 会自动注入 `PORT`，无需手动填写。
-
-## 可选环境变量
-- `PORT`：监听端口（默认 `8501`）
-- `RUN_DIR`：模型运行目录，默认：
-  `experiments_实验输出/e2_final_F3_reg_lr_tune_5fold10/raw_5fold10_F3_reg_lr_tune/run_20260417_223410`
+## 环境变量
+- `PORT`：监听端口（Railway 会自动注入）
+- `RUN_DIR`：模型目录（默认已指向当前内置 demo 模型路径）
+- `MAX_FOLDS`：推理使用的 fold 数，demo 默认 `1`
 
 ## Python 版本建议
-建议 `Python 3.10`（Railway 中可使用 3.10 或兼容版本）。
+建议 Python 3.10。
+
+## 说明
+- 当前为 demo deployment version，仅保留最小运行文件与单 fold 模型。
+- 如需恢复 5-fold，请补回 `fold_1` 到 `fold_4`，并去掉 `MAX_FOLDS=1`。

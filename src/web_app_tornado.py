@@ -117,6 +117,14 @@ def load_bundle(run_dir: Path) -> Dict:
     cv = load_json(run_dir / "cv_summary.json")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     fold_dirs = sorted([p for p in run_dir.glob("fold_*") if p.is_dir()])
+    max_folds_env = os.environ.get("MAX_FOLDS", "").strip()
+    if max_folds_env:
+        try:
+            max_folds = int(max_folds_env)
+            if max_folds > 0:
+                fold_dirs = fold_dirs[:max_folds]
+        except ValueError:
+            pass
     predictors = [build_fold_predictor(fd, cfg, device) for fd in fold_dirs]
     if not predictors:
         raise RuntimeError(f"No predictors found in {run_dir}")
@@ -478,7 +486,7 @@ def render_page(bundle: Dict, result: Dict | None = None, error: str | None = No
   <main class="wrap">
     <section class="hero">
       <h1>TSB Prediction System</h1>
-      <div class="sub">User mode: each image is predicted by 5-fold ensemble, then multiple images are aggregated by median.</div>
+      <div class="sub">User mode: each image is predicted by {len(bundle["predictors"])}-fold ensemble, then multiple images are aggregated by median.</div>
     </section>
     {examples_block}
 
